@@ -47,7 +47,7 @@ def scanner(BSSID, interface):
 			# mac in db
 			for id,mac,authorized,name,last_seen in data:
 				if detected_mac == mac:
-					if last_seen == detected_ip:
+					if last_seen != detected_ip:
 						update_last_seen_ip(id, detected_ip)
 						print("Updating ", detected_ip, "on id", id)
 					if authorized == 0 and AUTOKICK:
