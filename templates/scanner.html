@@ -1,0 +1,108 @@
+<html>
+	<head>
+		<script type='text/javascript' src='http://code.jquery.com/jquery-2.0.2.js'></script>
+		<title>LAN Scanner</title>
+		<link rel="stylesheet" type="text/css" href="http://getbootstrap.com/dist/css/bootstrap.css">
+		<link rel="stylesheet" type="text/css" href="http://cdnjs.cloudflare.com/ajax/libs/bootstrap-switch/1.8/css/bootstrap-switch.css">		
+		<script type='text/javascript' src="http://cdnjs.cloudflare.com/ajax/libs/bootstrap-switch/1.8/js/bootstrap-switch.min.js"></script>
+
+		<style>
+		.name:hover{background-color: #0058cc; color: white;}
+		</style>
+
+		<script type='text/javascript'>
+		window['updating'] = false;
+		$(document).ready(function setCallbacks() {
+    		$('.switch-on').on('switch-change', function (e, data) {
+        		var $el = $(data.el), value = data.value;
+        		var url = "http://".concat(window.location.hostname).concat(":").concat(window.location.port).concat("/update_state");
+        		$.post(url,{'id': $el.context.name, 'value': data.value}, function(){});
+    		});
+    		$('.name').click(function(e){
+    			if (!window['updating']){
+	    			var id = e.target.attributes.name.nodeValue;
+	    			var element = document.getElementsByName(id)[1];
+	    			var span = document.createElement("td");
+	    			span.innerHTML = '<input type="text" value=""><button type="button" class="old-input btn btn-primary" style="margin-left: 10px">Edit</button>';  
+	    			element.parentNode.replaceChild(span, element);
+	    			window['updating'] = true;
+	    			$('.btn').click(function(){
+	    				var element = document.getElementsByClassName("old-input")[0].parentNode;
+	    				var td = document.createElement("td");
+	    				var name = element.childNodes[0].value;
+	    				td.innerHTML = name;
+	    				td.className = "name";
+	    				td.setAttribute("name", id);
+	    				td.setAttribute("style", "width: 30%");
+	    				element.parentNode.replaceChild(td, element);
+	    				var url = "http://".concat(window.location.hostname).concat(":").concat(window.location.port).concat("/update_name");
+	    				$.post(url,{'id': id, 'name': name}, function(){});
+	    				window['updating'] = false;
+	    				setCallbacks();
+	    			});
+	    		}
+    		});
+		});  
+		</script>
+
+	</head>
+	<body>
+
+
+var myAnchor = document.getElementById("myAnchor");
+  var mySpan = document.createElement("span");
+  mySpan.innerHTML = "replaced anchor!";
+  myAnchor.parentNode.replaceChild(mySpan, myAnchor);
+
+		
+		<nav class="navbar navbar-inverse navbar-fixed-top">
+      		<div class="container">
+        		<div class="navbar-header">
+          			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+	            		<span class="sr-only">Toggle navigation</span>
+	            		<span class="icon-bar"></span>
+	            		<span class="icon-bar"></span>
+	            		<span class="icon-bar"></span>
+          			</button>
+          			<a class="navbar-brand" href="#">LAN Scanner</a>
+        		</div>
+        		<div id="navbar" class="navbar-collapse collapse">
+          			<ul class="nav navbar-nav">
+			            <li class="active"><a href="#">Home</a></li>
+          			</ul>
+        		</div>
+      		</div>
+    	</nav>
+
+    	<div class="container" style="margin-top: 100px;">
+	    	<table class="table table-striped col-md-6">
+	            <thead>
+	              <tr>
+	                <th>#</th>
+	                <th>Mac Address</th>
+	                <th>Last seen on</th>
+	                <th>Authorized</th>
+	                <th>Name</th>
+	              </tr>
+	            </thead>
+	            <tbody>
+	            {% for line in data %}
+	              <tr>
+	                <td>{{ line[0] }}</td>
+	                <td>{% filter upper %}{{ line[1] }}{% endfilter %}</td>
+	                <td>{{ line[4] }}</td>
+	                <td>
+	                	<div class="make-switch switch-on">
+    						<input name="{{ line[0] }}" type="checkbox" 
+    						{% if line[2] %}checked{% endif %}>
+						</div>
+	                </td>
+	                <td class="name" name="{{ line[0] }}" style="width: 30%">{{ line[3] }}</td>
+	              </tr>
+	            {% endfor %}
+	            </tbody>
+	          </table>
+	    </div>
+
+	</body>
+</html>
