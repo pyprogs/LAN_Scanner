@@ -5,11 +5,22 @@ import time
 import threading
 import sqlite3
 from flask import Flask, render_template, request
+from datetime import datetime
 
+# Scanner
 AUTOKICK = False
 DEFAULT_DEVICE_STATE = 0
 POLL = 5
+
+# Database 
 SQLITE_DB_PATH = "scanner.db"
+SQLITE_DB_TABLE = "mac_list"
+SQLITE_DB_MODEL = ["id", "mac", "authorized", "name", "ip", "last_seen"]
+
+
+    #######
+    # GUI #
+    #######
 
 app = Flask(__name__)
 
@@ -31,6 +42,11 @@ def update_name():
 	update_name(id, name)
 	return "Done" 
 
+
+    ###########
+    # SCANNER #
+    ###########
+
 def launch_scanner(BSSID,interface):
 	t = threading.Thread(target=scanner, args=(BSSID,interface,))
 	t.daemon = True
@@ -45,20 +61,19 @@ def scanner(BSSID, interface):
 		for detected_ip,detected_mac in l: 
 			done = False
 			# mac in db
-			for id,mac,authorized,name,last_seen in data:
-				if detected_mac == mac:
-					if last_seen != detected_ip:
-						update_last_seen_ip(id, detected_ip)
-						print("Updating ", detected_ip, "on id", id)
-					if authorized == 0 and AUTOKICK:
+			for line in data:
+				if detected_mac == line['mac']:
+					if detected_ip == line['ip']:
+						update_last_seen_ip(line['id'], detected_ip)
+					if line['authorized'] == 0 and AUTOKICK:
 						kick(detected_mac)
 						done = True
 						break
-					elif authorized == 0:
+					elif line['authorized'] == 0:
 						warning_known(detected_mac, detected_ip)
 						done = True
 						break
-					elif authorized == 1:
+					elif line['authorized'] == 1:
 						done = True
 						break
 			# mac not in db
@@ -68,45 +83,95 @@ def scanner(BSSID, interface):
 				if AUTOKICK:
 					kick(detected_mac)
 		time.sleep(POLL)
+
 		
+    ############
+    # DATABASE #
+    ############
+
+# Open or create the sqlite db file
+# checks whether the default table exists
+# and creates it if not
+def check_db():
+	with sqlite3.connect(SQLITE_DB_PATH) as conn:
+		c = conn.cursor()
+		c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'".format(table=SQLITE_DB_TABLE))
+		exists = len(c.fetchall()) > 0
+		if not exists:
+			c.execute('''
+				CREATE TABLE `{table}` (
+					`id`			INTEGER PRIMARY KEY AUTOINCREMENT,
+					`mac`			TEXT,
+					`authorized`	TEXT,
+					`name`			TEXT,
+					`ip`			TEXT,
+					`last_seen`		INTEGER
+				)'''.format(table=SQLITE_DB_TABLE))
+			conn.commit()
+
+# Loads the whole content of the SQLITE_DB_TABLE table
+# and returns a formatted list
 def load_db():
-	conn = sqlite3.connect(SQLITE_DB_PATH)
-	c = conn.cursor()
-	c.execute('SELECT * FROM mac_list')
-	data = c.fetchall()
-	conn.close()
-	return data
+	formated_data = []
+	with sqlite3.connect(SQLITE_DB_PATH) as conn:
+		c = conn.cursor()
+		c.execute('SELECT * FROM {table}'.format(table=SQLITE_DB_TABLE))
+		data = c.fetchall()
+		for line in data:
+			tmp_dic = {}.fromkeys(SQLITE_DB_MODEL)
+			for n in range(len(line)):
+				tmp_dic[SQLITE_DB_MODEL[n]] = line[n]
+			tmp_dic['id'] = int(float(tmp_dic['id']))
+			tmp_dic['authorized'] = int(float(tmp_dic['authorized']))
+			tmp_dic['last_seen'] = datetime.fromtimestamp(tmp_dic['last_seen'])
+			formated_data.append(tmp_dic)
+	return formated_data
 
+# Updates the authorized attribute in the db
+# triggered by the on/off button of the GUI
 def update_authorized(id, state):
-	conn = sqlite3.connect(SQLITE_DB_PATH)
-	c = conn.cursor()
-	authorized = 1
-	if state == 'false':
-		authorized = 0
-	c.execute('UPDATE mac_list SET authorized = "' + str(authorized) + '" WHERE id = ' + str(id))
-	conn.commit()
-	conn.close()
-
+	with sqlite3.connect(SQLITE_DB_PATH) as conn:
+		c = conn.cursor()
+		authorized = 1
+		if state == 'false':
+			authorized = 0
+		c.execute('''
+			UPDATE {table} SET authorized = ? WHERE id = ?
+			'''.format(table=SQLITE_DB_TABLE), (authorized, id,))
+		conn.commit()
+	
+# Updates the name of the mac address in the sqlite db
 def update_name(id, name):
-	conn = sqlite3.connect(SQLITE_DB_PATH)
-	c = conn.cursor()
-	c.execute('UPDATE mac_list SET name = "' + name + '" WHERE id = ' + str(id))
-	conn.commit()
-	conn.close()	
+	with sqlite3.connect(SQLITE_DB_PATH) as conn:
+		c = conn.cursor()
+		c.execute('''
+			UPDATE {table} SET name = ? WHERE id = ?
+			'''.format(table=SQLITE_DB_TABLE), (name, id,))
+		conn.commit()
 
 def insert_mac_in_db(mac, ip):
 	conn = sqlite3.connect(SQLITE_DB_PATH)
 	c = conn.cursor()
-	c.execute('INSERT INTO mac_list (mac, ip, authorized)	VALUES ("'+mac+'", "'+ip+'", "'+str(DEFAULT_DEVICE_STATE)+'");')
+	c.execute('''
+		INSERT INTO {table} (mac, ip, authorized, last_seen)
+		VALUES (?, ?, ?, ?)
+		'''.format(table=SQLITE_DB_TABLE), (mac, ip, DEFAULT_DEVICE_STATE, int(time.time())))
 	conn.commit()
 	conn.close()
 
 def update_last_seen_ip(id, ip):
 	conn = sqlite3.connect(SQLITE_DB_PATH)
 	c = conn.cursor()
-	c.execute('UPDATE mac_list SET ip = "' + ip + '" WHERE id = ' + str(id))
+	c.execute('''
+		UPDATE {table} SET ip = ?, last_seen = ? WHERE id = ?
+		'''.format(table=SQLITE_DB_TABLE), (ip, int(time.time()), id,))
 	conn.commit()
 	conn.close()	
+
+
+    ###################
+    # DEVICE HANDLING #
+    ###################
 
 def kick(mac):
 	print("Kicking device", mac)
@@ -117,6 +182,11 @@ def warning_new(detected_mac, detected_ip):
 
 def warning_known(detected_mac, detected_ip):
 	print("Warning known", detected_mac, detected_ip)
+	
+
+    ########
+    # MAIN #
+    ########
 
 def usage():
 	print("Usage : lan_scanner.py <BSSID> <scanning_iface>")
@@ -131,5 +201,6 @@ if __name__ == "__main__":
 		else:
 			interface = sys.argv[2]
 			BSSID = sys.argv[1]
+			check_db()
 			launch_scanner(BSSID, interface)
 			app.run(debug=True)

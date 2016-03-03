@@ -15,7 +15,7 @@
 		$(document).ready(function setCallbacks() {
     		$('.switch-on').on('switch-change', function (e, data) {
         		var $el = $(data.el), value = data.value;
-        		var url = "http://".concat(window.location.hostname).concat(":").concat(window.location.port).concat("/update_state");
+        		var url = "http://" + window.location.hostname + ":" + window.location.port + "/update_state";
         		$.post(url,{'id': $el.context.name, 'value': data.value}, function(){});
     		});
     		$('.name').click(function(e){
@@ -23,11 +23,13 @@
 	    			var id = e.target.attributes.name.nodeValue;
 	    			var element = document.getElementsByName(id)[1];
 	    			var span = document.createElement("td");
-	    			span.innerHTML = '<input type="text" value=""><button type="button" class="old-input btn btn-primary" style="margin-left: 10px">Edit</button>';  
+	    			span.setAttribute("name", id);
+	    			span.innerHTML = '<input class="input-pressed" type="text" value="'+element.innerHTML+'"><button name="'+id+'" type="button" class="old-input btn btn-primary" style="margin-left: 10px">Edit</button>';  
 	    			element.parentNode.replaceChild(span, element);
 	    			window['updating'] = true;
-	    			$('.btn').click(function(){
-	    				var element = document.getElementsByClassName("old-input")[0].parentNode;
+	    			function update_and_clean(e){
+	    				var id = $('.old-input')[0].name;
+	    				var element = $('.old-input')[0].parentNode;
 	    				var td = document.createElement("td");
 	    				var name = element.childNodes[0].value;
 	    				td.innerHTML = name;
@@ -35,10 +37,14 @@
 	    				td.setAttribute("name", id);
 	    				td.setAttribute("style", "width: 30%");
 	    				element.parentNode.replaceChild(td, element);
-	    				var url = "http://".concat(window.location.hostname).concat(":").concat(window.location.port).concat("/update_name");
+	    				var url = "http://" + window.location.hostname + ":" + window.location.port + "/update_name";
 	    				$.post(url,{'id': id, 'name': name}, function(){});
 	    				window['updating'] = false;
 	    				setCallbacks();
+	    			};
+	    			$('.btn').click(update_and_clean);
+	    			$('.input-pressed').keypress(function(e){
+	    				if(e.keyCode==13){update_and_clean(e);}
 	    			});
 	    		}
     		});
@@ -47,23 +53,10 @@
 
 	</head>
 	<body>
-
-
-var myAnchor = document.getElementById("myAnchor");
-  var mySpan = document.createElement("span");
-  mySpan.innerHTML = "replaced anchor!";
-  myAnchor.parentNode.replaceChild(mySpan, myAnchor);
-
 		
 		<nav class="navbar navbar-inverse navbar-fixed-top">
       		<div class="container">
         		<div class="navbar-header">
-          			<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
-	            		<span class="sr-only">Toggle navigation</span>
-	            		<span class="icon-bar"></span>
-	            		<span class="icon-bar"></span>
-	            		<span class="icon-bar"></span>
-          			</button>
           			<a class="navbar-brand" href="#">LAN Scanner</a>
         		</div>
         		<div id="navbar" class="navbar-collapse collapse">
@@ -75,12 +68,13 @@ var myAnchor = document.getElementById("myAnchor");
     	</nav>
 
     	<div class="container" style="margin-top: 100px;">
-	    	<table class="table table-striped col-md-6">
+	    	<table class="table table-striped col-md-8">
 	            <thead>
 	              <tr>
 	                <th>#</th>
 	                <th>Mac Address</th>
 	                <th>Last seen on</th>
+	                <th>Last seen at</th>
 	                <th>Authorized</th>
 	                <th>Name</th>
 	              </tr>
@@ -88,16 +82,17 @@ var myAnchor = document.getElementById("myAnchor");
 	            <tbody>
 	            {% for line in data %}
 	              <tr>
-	                <td>{{ line[0] }}</td>
-	                <td>{% filter upper %}{{ line[1] }}{% endfilter %}</td>
-	                <td>{{ line[4] }}</td>
+	                <td>{{ line['id'] }}</td>
+	                <td>{% filter upper %}{{ line['mac'] }}{% endfilter %}</td>
+	                <td>{{ line['ip'] }}</td>
+	                <td>{{ line['last_seen'].strftime('%d-%m-%Y %H:%M:%S') }}</td>
 	                <td>
 	                	<div class="make-switch switch-on">
-    						<input name="{{ line[0] }}" type="checkbox" 
-    						{% if line[2] %}checked{% endif %}>
+    						<input name="{{ line['id'] }}" type="checkbox" 
+    						{% if line['authorized'] == 1 %}checked{% endif %}>
 						</div>
 	                </td>
-	                <td class="name" name="{{ line[0] }}" style="width: 30%">{{ line[3] }}</td>
+	                <td class="name" name="{{ line['id'] }}" style="width: 30%">{{ line['name'] }}</td>
 	              </tr>
 	            {% endfor %}
 	            </tbody>
